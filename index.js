@@ -19,7 +19,9 @@ db();
 const port = process.env.PORT || 3000;
 
 
-
+app.use('/', (req, res) => {
+    res.send("Hello World!")
+})
 
 
 

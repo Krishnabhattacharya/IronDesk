@@ -46,5 +46,32 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+userSchema.pre("save", async function (next) {
+    const user = this;
+    if (user.isModified("password")) {
+        user.password = await bcrypt.hash(user.password, 10);
+    }
+    next();
+})
 
-module.exports = mongoose.model('User', userSchema);
+userSchema.methods.generateToken = async function () {
+    const user = this;
+    const token = jwt.sign({ _id: user._id.toString() }, process.env.TOKEN);
+    user.tokens = user.tokens.concat({ token });
+    await user.save();
+    return token;
+}
+
+userSchema.methods.toJSON = function () {
+    const user = this;
+    const userObject = user.toObject();
+    delete userObject.password,
+        delete userObject.tokens
+    return userObject;
+}
+
+
+
+
+const User = mongoose.model("User", userSchema);
+export default User;
