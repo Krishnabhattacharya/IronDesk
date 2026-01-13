@@ -27,13 +27,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (if applicable)
-        run: |
-          if [ -f package.json ] && grep -q "\"build\":" package.json; then
-            npm run build
-          else
-            echo "No build step defined"
-          fi
-
       - name: CI completed
         run: echo "✅ CI finished successfully (no tests)"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/prod'
+    
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.PRIVATE_KEY }}
+          script: |
+            cd ${{ secrets.PROJECT_PATH }}
+            git pull origin prod
+            npm install
+            pm2 restart all
