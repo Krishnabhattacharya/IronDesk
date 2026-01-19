@@ -6,6 +6,11 @@ const workLocationSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
+    company: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Company",
+        required: true
+    },
     latitude: {
         type: Number,
         required: true

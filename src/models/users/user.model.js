@@ -20,9 +20,13 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['USER', 'ADMIN', 'HR', 'ENGINEER', 'TECHNICIAN'],
+      enum: ['USER', 'ADMIN', 'HR', 'EMPLOYEE'],
       default: 'USER',
       required: true,
+    },
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Company',
     },
 
     isActive: {

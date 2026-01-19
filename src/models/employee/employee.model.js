@@ -7,6 +7,11 @@ const employeeSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  company: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: true
+  },
   designation: {
     type: String,
     required: true

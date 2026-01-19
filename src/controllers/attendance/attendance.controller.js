@@ -7,7 +7,7 @@ import Employee from "../../models/employee/employee.model.js";
 import moment from "moment";
 import mongoose from "mongoose";
 
-function getDistanceFromLatLonInMiters(lat1, lon1, lat2, lon2) {
+function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
@@ -31,11 +31,16 @@ const addWorkLocation = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Name, latitude, and longitude are required");
     }
 
+    const user = req.user;
+    const employee = await Employee.findOne({ employeeId: user._id });
+    if (!employee) throw new ApiError(404, "Employee not found");
+
     const location = await WorkLocation.create({
         name,
         latitude,
         longitude,
-        radiusInMeters: radiusInMeters || 100
+        radiusInMeters: radiusInMeters || 100,
+        company: employee.company
     });
 
     return res.status(201).json(
@@ -44,7 +49,11 @@ const addWorkLocation = asyncHandler(async (req, res) => {
 });
 
 const getWorkLocations = asyncHandler(async (req, res) => {
-    const locations = await WorkLocation.find({ isActive: true });
+    const user = req.user;
+    const employee = await Employee.findOne({ employeeId: user._id });
+    if (!employee) throw new ApiError(404, "Employee not found");
+
+    const locations = await WorkLocation.find({ isActive: true, company: employee.company });
     return res.status(200).json(
         new ApiResponse(200, locations, "Work locations fetched successfully")
     );
@@ -62,11 +71,11 @@ const checkIn = asyncHandler(async (req, res) => {
     if (!biometricVerified) {
         throw new ApiError(403, "Biometric verification failed");
     }
-    const activeLocations = await WorkLocation.find({ isActive: true });
+    const activeLocations = await WorkLocation.find({ isActive: true, company: employee.company });
     let isInside = false;
 
     for (const loc of activeLocations) {
-        const distance = getDistanceFromLatLonInMiters(latitude, longitude, loc.latitude, loc.longitude);
+        const distance = getDistanceFromLatLonInMeters(latitude, longitude, loc.latitude, loc.longitude);
         if (distance <= loc.radiusInMeters) {
             isInside = true;
             break;
