@@ -7,7 +7,7 @@ const attendanceSchema = new mongoose.Schema({
         required: true
     },
     date: {
-        type: String, 
+        type: String,
         required: true
     },
     checkInTime: {
@@ -30,8 +30,17 @@ const attendanceSchema = new mongoose.Schema({
         default: "BIOMETRIC"
     },
     status: {
-        type: String, 
+        type: String,
         required: true
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    verificationStatus: {
+        type: String,
+        enum: ["PENDING", "APPROVED", "REJECTED"],
+        default: "PENDING"
     }
 }, {
     timestamps: true

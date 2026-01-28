@@ -4,6 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import Employee from "../../models/employee/employee.model.js";
+import "../../models/company/company.model.js";
 import mongoose from "mongoose";
 
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -78,7 +79,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
 
-    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+    const loggedInUser = await User.findById(user._id).populate("company").select("-password -refreshToken");
 
     const options = {
         httpOnly: true,
@@ -165,14 +166,20 @@ const createEmployeeFromUser = asyncHandler(async (req, res) => {
 
     const imageUrl = req.file?.location;
 
+    // Ensure user has a company before creating employee
+    if (!user.company) {
+        throw new ApiError(400, "User must belong to a company to become an employee");
+    }
+
     const employee = await Employee.create({
         employeeId,
         department,
         designation,
         shift,
-        imageUrl
+        imageUrl,
+        company: user.company // Assign the user's company to the employee
     });
-    user.role = role || "ENGINEER";
+    user.role = role || "EMPLOYEE";
     user.employee = employee._id;
     await user.save();
 
@@ -187,7 +194,7 @@ const getUserById = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid MongoDB user id");
     }
 
-    const user = await User.findById(id);
+    const user = await User.findById(id).populate("company");
     if (!user) {
         throw new ApiError(404, "User not found");
     }
@@ -199,7 +206,7 @@ const getAllUsers = asyncHandler(async (req, res) => {
     const users = await User.find({
         role: "USER",
         isActive: true
-    }).select("-password -refreshToken");
+    }).populate("company").select("-password -refreshToken");
 
     return res.status(200).json(
         new ApiResponse(200, users, "Pending users fetched successfully")

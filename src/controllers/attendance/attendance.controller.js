@@ -102,7 +102,9 @@ const checkIn = asyncHandler(async (req, res) => {
         date: today,
         checkInTime,
         checkInLocation: { lat: latitude, lng: longitude },
-        status
+        status,
+        isVerified: true,
+        verificationStatus: "APPROVED"
     });
 
     return res.status(200).json(
@@ -179,6 +181,155 @@ const getEmployeeAttendance = asyncHandler(async (req, res) => {
     );
 });
 
+const getAllCompanyAttendance = asyncHandler(async (req, res) => {
+    const user = req.user;
+    let companyId;
+
+    const employee = await Employee.findOne({ employeeId: user._id });
+
+    if (employee) {
+        console.log("Logged-in Employee:", employee);
+        companyId = employee.company;
+    } else if (user.company) {
+        console.log("Logged-in User Company (Fallback):", user.company);
+        companyId = user.company._id || user.company; // Handle populated or unpopulated
+    } else {
+        throw new ApiError(404, "Company information not found for the requesting user");
+    }
+
+    console.log("HR/Admin Company ID (Raw):", companyId);
+    console.log("HR/Admin Company ID (Type):", typeof companyId);
+
+    // Find all employees in the same company
+    const companyEmployees = await Employee.find({ company: companyId }).select("_id");
+    console.log("Found Company Employees Count:", companyEmployees.length);
+
+    // Debug: Try finding ALL employees to see their structure
+    if (companyEmployees.length === 0) {
+        const allEmps = await Employee.find({});
+        console.log("Total Employees in DB:", allEmps.length);
+        if (allEmps.length > 0) {
+            console.log("Sample Employee Company:", allEmps[0].company);
+        }
+    }
+
+    const employeeIds = companyEmployees.map(emp => emp._id);
+    console.log("Employee IDs:", employeeIds);
+
+    const attendanceRecords = await Attendance.find({ employeeId: { $in: employeeIds } })
+        .sort({ date: -1 })
+        .populate({
+            path: "employeeId",
+            select: "designation department employeeId", // employeeId field in Employee model refers to User
+            populate: {
+                path: "employeeId", // Nested populate to get User details (name, email)
+                select: "name email avatar"
+            }
+        });
+
+    return res.status(200).json(
+        new ApiResponse(200, attendanceRecords, "All company attendance fetched successfully")
+    );
+});
+
+
+
+const requestAttendance = asyncHandler(async (req, res) => {
+    const { date, checkInTime, checkOutTime, reason } = req.body;
+    const userId = req.user._id;
+
+    const employee = await Employee.findOne({ employeeId: userId });
+    if (!employee) {
+        throw new ApiError(404, "Employee record not found");
+    }
+
+    const requestedDate = date || moment().format("YYYY-MM-DD");
+
+    const existingAttendance = await Attendance.findOne({
+        employeeId: employee._id,
+        date: requestedDate
+    });
+
+    if (existingAttendance) {
+        if (existingAttendance.verificationStatus === "PENDING") {
+            throw new ApiError(400, "A pending request for this date already exists.");
+        }
+        if (existingAttendance.verificationStatus === "APPROVED") {
+            throw new ApiError(400, "Attendance for this date is already verified.");
+        }
+    }
+
+    const cInTime = checkInTime ? new Date(checkInTime) : new Date();
+
+    const threshold = moment(requestedDate, "YYYY-MM-DD").set({ hour: 9, minute: 30, second: 0 });
+    const checkInMoment = moment(cInTime);
+    const status = checkInMoment.isAfter(threshold) ? "LATE" : "PRESENT";
+
+    const newAttendance = await Attendance.create({
+        employeeId: employee._id,
+        date: requestedDate,
+        checkInTime: cInTime,
+        checkOutTime: checkOutTime ? new Date(checkOutTime) : null,
+        status,
+        method: "WEB",
+        isVerified: false,
+        verificationStatus: "PENDING"
+    });
+
+    return res.status(201).json(
+        new ApiResponse(201, newAttendance, "Attendance request submitted for approval")
+    );
+});
+
+const handleAttendanceRequest = asyncHandler(async (req, res) => {
+    const { attendanceId, action } = req.body;
+
+    if (!["APPROVE", "REJECT"].includes(action)) {
+        throw new ApiError(400, "Invalid action. Use APPROVE or REJECT");
+    }
+
+    const attendance = await Attendance.findById(attendanceId);
+    if (!attendance) {
+        throw new ApiError(404, "Attendance record not found");
+    }
+
+    if (action === "APPROVE") {
+        attendance.isVerified = true;
+        attendance.verificationStatus = "APPROVED";
+    } else {
+        attendance.isVerified = false;
+        attendance.verificationStatus = "REJECTED";
+    }
+
+    await attendance.save();
+
+    return res.status(200).json(
+        new ApiResponse(200, attendance, `Attendance request ${action === "APPROVE" ? "approved" : "rejected"}`)
+    );
+});
+
+const updateAttendance = asyncHandler(async (req, res) => {
+    const { attendanceId, date, checkInTime, checkOutTime, status } = req.body;
+
+    const attendance = await Attendance.findById(attendanceId);
+    if (!attendance) {
+        throw new ApiError(404, "Attendance record not found");
+    }
+
+    if (date) attendance.date = date;
+    if (checkInTime) attendance.checkInTime = new Date(checkInTime);
+    if (checkOutTime) attendance.checkOutTime = new Date(checkOutTime);
+    if (status) attendance.status = status;
+
+    attendance.isVerified = true;
+    attendance.verificationStatus = "APPROVED";
+
+    await attendance.save();
+
+    return res.status(200).json(
+        new ApiResponse(200, attendance, "Attendance updated successfully")
+    );
+});
 
 export {
     addWorkLocation,
@@ -186,5 +337,9 @@ export {
     checkIn,
     checkOut,
     getMyAttendance,
-    getEmployeeAttendance
+    getEmployeeAttendance,
+    getAllCompanyAttendance,
+    requestAttendance,
+    handleAttendanceRequest,
+    updateAttendance
 };

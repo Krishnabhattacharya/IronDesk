@@ -78,3 +78,16 @@ Refresh token rotation check
 Helmet
 
 Rate limiting
+
+## 🚀 Deployment to Vercel
+
+1. **Install Vercel CLI**: `npm i -g vercel`
+2. **Login**: `vercel login`
+3. **Deploy**: Run `vercel` in the project root.
+4. **Environment Variables**: Go to Vercel Dashboard > Settings > Environment Variables and add:
+   - `MONGO_URL`
+   - `ACCESS_TOKEN_SECRET`
+   - `REFRESH_TOKEN_SECRET` (if used)
+   - `AWS_BUCKET_NAME`
+   - `AWS_REGION`
+   - Any other secrets from `.env`
